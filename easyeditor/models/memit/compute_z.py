@@ -92,14 +92,23 @@ def compute_z(
 
         def _unwrap_output(output):
             if isinstance(output, torch.Tensor):
-                return output, None
-            if isinstance(output, (list, tuple)):
+                return output, output
+            elif isinstance(output, dict):
+                # FIX: Handle dict outputs from newer transformers (e.g., Qwen3)
+                if "hidden_states" in output:
+                    return output["hidden_states"], output
+                else:
+                    # Fallback: grab the first value in the dict
+                    # This handles cases where keys might be different
+                    key = next(iter(output))
+                    return output[key], output
+            elif isinstance(output, tuple):
                 if len(output) == 0:
-                    raise ValueError("Layer output container is empty.")
+                    raise ValueError("Layer output tuple is empty.")
+                # Standard tuple output (hidden_states, ...)
                 return output[0], output
-            raise TypeError(
-                f"Unsupported layer output type {type(output)} encountered in MEMIT."
-            )
+            else:
+                raise TypeError(f"Unsupported layer output type {type(output)} encountered in MEMIT.")
 
         def _rewrap_output(updated, original):
             if original is None:
