@@ -164,7 +164,28 @@ def compute_z(
             retain_output=True,
             edit_output=edit_output_fn,
         ) as tr:
+            # --- START PATCH ---
+            input_ids = input_tok['input_ids']
+            batch_size, seq_len = input_ids.shape
+
+            # 1. Force cache position to cover the full sequence
+            cache_position = torch.arange(seq_len, device=input_ids.device)
+
+            # 2. CRITICAL: Explicitly set past_key_values to None
+            #    This prevents any accidental incremental generation behavior.
+            input_tok['past_key_values'] = None
+
+            # 3. CRITICAL: Set logits_to_keep to 0 (process all tokens)
+            #    In Qwen3/Transformers 4.51+, this defaults to 1 (last token only),
+            #    causing the hidden states to be sliced to size 1.
+            input_tok['logits_to_keep'] = 0
+
+            input_tok['cache_position'] = cache_position
+            input_tok['use_cache'] = False
+
             logits = model(**input_tok).logits
+            # --- END PATCH ---
+
             # Compute distribution for KL divergence
             kl_logits = torch.stack(
                 [
